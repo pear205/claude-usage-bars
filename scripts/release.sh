@@ -27,4 +27,4 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 git push -q
 claude plugin marketplace update usage-bars
 claude plugin update usage-bars@usage-bars
-echo "v$new 배포 완료. 새 세션부터 반영돼요."
+echo "v$new 배포 완료. Claude 앱을 재시작하면 반영돼요."
