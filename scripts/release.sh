@@ -20,6 +20,7 @@ sed -i "s/\"version\": *\"$old\"/\"version\": \"$new\"/" "$manifest"
 echo "version: $old -> $new"
 
 claude plugin validate .
+claude plugin test .
 git add -A
 git commit -q -m "$msg (v$new)
 
