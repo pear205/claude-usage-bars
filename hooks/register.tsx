@@ -4,11 +4,12 @@ import type { Register } from 'claude-code'
 import type { Limit } from '../types'
 
 const limits = atom({ plugin: 'usage-bars', key: 'limits' } as const, [] as Limit[])
+const context = atom({ plugin: 'usage-bars', key: 'context' } as const, null as number | null)
 
-const WIDTH = 20
+const WIDTH = 8
 const ROWS: { kind: string; label: string }[] = [
-  { kind: 'five_hour', label: '5시간' },
-  { kind: 'seven_day', label: '주간 ' },
+  { kind: 'five_hour', label: '5h' },
+  { kind: 'seven_day', label: '주' },
 ]
 
 function bar(pct: number): string {
@@ -20,16 +21,14 @@ function colorFor(pct: number): 'success' | 'warning' | 'error' {
   return pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'success'
 }
 
+// 남은 시간을 가장 큰 단위 하나로: ↻3d, ↻2h, ↻45m
 function resetText(resetsAt: string | undefined, now: number): string {
   if (!resetsAt) return ''
   const ms = Date.parse(resetsAt) - now
   if (!Number.isFinite(ms) || ms <= 0) return ''
-  const min = Math.round(ms / 60000)
-  const d = Math.floor(min / 1440)
-  const h = Math.floor((min % 1440) / 60)
-  const m = min % 60
-  const left = d > 0 ? `${d}일 ${h}시간` : h > 0 ? `${h}시간 ${m}분` : `${m}분`
-  return ` · ${left} 후 초기화`
+  const min = Math.ceil(ms / 60000)
+  const left = min >= 1440 ? `${Math.floor(min / 1440)}d` : min >= 60 ? `${Math.floor(min / 60)}h` : `${min}m`
+  return ` ↻${left}`
 }
 
 export const register: Register = on => {
@@ -37,6 +36,7 @@ export const register: Register = on => {
     const result = await next(e)
     const usage = await $.session.usage()
     await update($, limits, () => usage.rateLimits.map(r => ({ ...r })))
+    await update($, context, () => usage.context.percent ?? null)
     return result
   })
 
@@ -44,32 +44,49 @@ export const register: Register = on => {
     if (e.changed.includes('rateLimits')) {
       await update($, limits, () => e.rateLimits.map(r => ({ ...r })))
     }
+    if (e.changed.includes('context')) {
+      await update($, context, () => e.context.percent ?? null)
+    }
     return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const all = await read($, limits)
-    const shown = ROWS.map(r => ({ ...r, lim: all.find(l => l.kind === r.kind) }))
-    if (shown.every(r => !r.lim)) return next(e)
+    const ctx = await read($, context)
+    const shown = ROWS.flatMap(r => {
+      const lim = all.find(l => l.kind === r.kind)
+      return lim ? [{ ...r, lim }] : []
+    })
+    if (shown.length === 0 && ctx === null) return next(e)
 
     const now = await $.clock.now()
     const { Box, Text } = $.ui.resolve(e)
 
+    const cells = [
+      ...(ctx !== null ? [{ key: 'ctx', label: 'ctx', pct: ctx, reset: '' }] : []),
+      ...shown.map(({ kind, label, lim }) => ({
+        key: kind,
+        label,
+        pct: lim.percentUsed,
+        reset: resetText(lim.resetsAt, now),
+      })),
+    ]
+
     return (
-      <Box flexDirection="column">
-        {shown.map(({ kind, label, lim }) =>
-          lim ? (
-            <Text key={kind}>
-              <Text dimColor>{label} </Text>
-              <Text color={colorFor(lim.percentUsed)}>{bar(lim.percentUsed)}</Text>
-              <Text> {Math.round(lim.percentUsed)}%</Text>
-              <Text dimColor>{resetText(lim.resetsAt, now)}</Text>
+      <Box flexDirection="row">
+        <Text>
+          {cells.map((c, i) => (
+            <Text key={c.key}>
+              {i > 0 ? <Text dimColor>{'  │  '}</Text> : null}
+              <Text dimColor>{c.label} </Text>
+              <Text bold color={colorFor(c.pct)}>{Math.round(c.pct)}%</Text>
+              <Text> </Text>
+              <Text color={colorFor(c.pct)} dimColor>{bar(c.pct)}</Text>
+              <Text dimColor>{c.reset}</Text>
             </Text>
-          ) : (
-            <Text key={kind} dimColor>{label} 아직 측정값 없음</Text>
-          ),
-        )}
+          ))}
+        </Text>
       </Box>
     )
   })
