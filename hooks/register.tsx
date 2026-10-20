@@ -21,14 +21,17 @@ function colorFor(pct: number): 'success' | 'warning' | 'error' {
   return pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'success'
 }
 
-// 남은 시간을 가장 큰 단위 하나로: ↻3d, ↻2h, ↻45m
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+
+// 초기화 시각: 오늘이면 ↻15:30, 다른 날이면 ↻목 15:30
 function resetText(resetsAt: string | undefined, now: number): string {
   if (!resetsAt) return ''
-  const ms = Date.parse(resetsAt) - now
-  if (!Number.isFinite(ms) || ms <= 0) return ''
-  const min = Math.ceil(ms / 60000)
-  const left = min >= 1440 ? `${Math.floor(min / 1440)}d` : min >= 60 ? `${Math.floor(min / 60)}h` : `${min}m`
-  return ` ↻${left}`
+  const at = Date.parse(resetsAt)
+  if (!Number.isFinite(at) || at <= now) return ''
+  const d = new Date(at)
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const sameDay = d.toDateString() === new Date(now).toDateString()
+  return ` ↻${sameDay ? '' : WEEKDAYS[d.getDay()] + ' '}${hm}`
 }
 
 export const register: Register = on => {
@@ -74,7 +77,7 @@ export const register: Register = on => {
     ]
 
     return (
-      <Box flexDirection="row">
+      <Box flexDirection="row" justifyContent="flex-end" width={e.props.bodyColumns}>
         <Text>
           {cells.map((c, i) => (
             <Text key={c.key}>
