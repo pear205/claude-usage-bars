@@ -10,8 +10,8 @@ const startedAt = atom({ plugin: 'usage-bars', key: 'startedAt' } as const, null
 // 분 단위 시계: 바뀔 때마다 다시 그려서 초기화·경과 시간을 응답 없이도 갱신
 const minute = atom({ plugin: 'usage-bars', key: 'minute' } as const, 0)
 
-const WIDTH = 8
-const SEP = '  │  '
+const WIDTH = 6
+const SEP = ' │ '
 const ROWS: { kind: string; label: string }[] = [
   { kind: 'five_hour', label: '5h' },
   { kind: 'seven_day', label: '주' },
@@ -35,15 +35,22 @@ function resetText(at: number, now: number): string {
   return ` ↻${sameDay ? '' : WEEKDAYS[d.getDay()] + ' '}${hm}`
 }
 
+// 경과 시간: ⏱45m, ⏱3h12m, 하루 넘으면 ⏱4d2h
 function elapsedText(ms: number): string {
   const min = Math.max(0, Math.floor(ms / 60000))
-  return min >= 60 ? `⏱${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}m` : `⏱${min}m`
+  const h = Math.floor(min / 60)
+  if (h >= 24) return `⏱${Math.floor(h / 24)}d${h % 24}h`
+  return h > 0 ? `⏱${h}h${String(min % 60).padStart(2, '0')}m` : `⏱${min}m`
 }
 
-// 터미널 칸 수: 한글은 2칸
+function costText(usd: number): string {
+  return '$' + (usd >= 100 ? String(Math.round(usd)) : usd.toFixed(2))
+}
+
+// 터미널 칸 수: 한글과 ⏱↻는 넉넉히 2칸
 function cols(s: string): number {
   let n = 0
-  for (const ch of s) n += /[ᄀ-ᇿ㄰-㆏가-힯]/.test(ch) ? 2 : 1
+  for (const ch of s) n += /[ᄀ-ᇿ㄰-㆏가-힯⏱↻]/.test(ch) ? 2 : 1
   return n
 }
 
@@ -107,12 +114,18 @@ export const register: Register = on => {
       })
     }
     if (cells.length === 0) return next(e)
-    if (cost !== null) cells.push({ key: 'cost', label: '', text: `$${cost.toFixed(2)}` })
+    if (cost !== null) cells.push({ key: 'cost', label: '', text: costText(cost) })
     if (started !== null) cells.push({ key: 'elapsed', label: '', text: elapsedText(now - started) })
 
-    // 한 줄에 안 들어가면 바를 빼고 숫자만
-    const full = cells.map(c => cellText(c, true)).join(SEP)
-    const withBar = cols(full) <= e.props.bodyColumns
+    // 한 줄에 들어갈 때까지 줄임: 바 → 비용·경과 → 초기화 시각
+    // 데스크톱은 비례 글꼴이라 바·기호가 넓게 그려져 칸 수를 70% 로 잡음
+    const budget = Math.floor(e.props.bodyColumns * (e.surface === 'desktop' ? 0.7 : 1)) - 2
+    const fits = (cs: Cell[], bars: boolean) => cols(cs.map(c => cellText(c, bars)).join(SEP)) <= budget
+    const withBar = fits(cells, true)
+    if (!withBar && !fits(cells, false)) {
+      const core = cells.filter(c => c.pct !== undefined)
+      cells.splice(0, cells.length, ...(fits(core, false) ? core : core.map(c => ({ ...c, reset: '' }))))
+    }
 
     const { Box, Text } = $.ui.resolve(e)
     return (

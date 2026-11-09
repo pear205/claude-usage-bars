@@ -27,7 +27,7 @@ test('한 줄 표시: 초기화 지나면 0%, 비용·경과, 좁으면 바 생�
   for (const ui of uis) {
     const text = (await ui.find({ type: 'Text' }))?.text ?? ''
     expect(text).toContain('ctx 42%')
-    expect(text).toContain('5h 63% █████░░░ ↻15:30')
+    expect(text).toContain('5h 63% ████░░ ↻15:30')
     expect(text).toContain('주 12%')
     expect(text).toContain('↻목 09:00')
     expect(text).toContain('$1.24')
@@ -42,7 +42,10 @@ test('한 줄 표시: 초기화 지나면 0%, 비용·경과, 좁으면 바 생�
     expect(text).toContain('⏱1h43m')
 
     await ui.redraw({ hasSurvey: false, bodyColumns: 50 } as never)
-    expect((await ui.find({ type: 'Text' }))?.text ?? '').not.toContain('█')
+    const narrow = (await ui.find({ type: 'Text' }))?.text ?? ''
+    expect(narrow).not.toContain('█')
+    expect(narrow).not.toContain('$1.24')
+    expect(narrow).toContain('5h 0%')
     await ui.unmount()
   }
 })
