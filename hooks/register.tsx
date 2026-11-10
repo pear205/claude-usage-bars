@@ -11,7 +11,7 @@ const startedAt = atom({ plugin: 'usage-bars', key: 'startedAt' } as const, null
 const minute = atom({ plugin: 'usage-bars', key: 'minute' } as const, 0)
 
 const WIDTH = 6
-const SEP = ' │ '
+const SEP = ' | '
 const ROWS: { kind: string; label: string }[] = [
   { kind: 'five_hour', label: '5h' },
   { kind: 'seven_day', label: '주' },
@@ -47,10 +47,10 @@ function costText(usd: number): string {
   return '$' + (usd >= 100 ? String(Math.round(usd)) : usd.toFixed(2))
 }
 
-// 터미널 칸 수: 한글과 ⏱↻는 넉넉히 2칸
+// 칸 수: 한국어 환경 터미널은 █░↻⏱ 같은 기호도 2칸으로 그리므로 ASCII 가 아니면 2칸
 function cols(s: string): number {
   let n = 0
-  for (const ch of s) n += /[ᄀ-ᇿ㄰-㆏가-힯⏱↻]/.test(ch) ? 2 : 1
+  for (const ch of s) n += ch.charCodeAt(0) < 0x80 ? 1 : 2
   return n
 }
 
@@ -118,8 +118,8 @@ export const register: Register = on => {
     if (started !== null) cells.push({ key: 'elapsed', label: '', text: elapsedText(now - started) })
 
     // 한 줄에 들어갈 때까지 줄임: 바 → 비용·경과 → 초기화 시각
-    // 데스크톱은 비례 글꼴이라 바·기호가 넓게 그려져 칸 수를 70% 로 잡음
-    const budget = Math.floor(e.props.bodyColumns * (e.surface === 'desktop' ? 0.7 : 1)) - 2
+    // 데스크톱은 비례 글꼴이라 바·기호가 넓게 그려져 칸 수를 60% 로 잡음
+    const budget = Math.floor(e.props.bodyColumns * (e.surface === 'desktop' ? 0.6 : 1)) - 2
     const fits = (cs: Cell[], bars: boolean) => cols(cs.map(c => cellText(c, bars)).join(SEP)) <= budget
     const withBar = fits(cells, true)
     if (!withBar && !fits(cells, false)) {
